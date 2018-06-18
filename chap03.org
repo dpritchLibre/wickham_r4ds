@@ -1,0 +1,287 @@
+#+OPTIONS: ^:{}
+
+* Data Transformation with ~dplyr~
+
+** Introduction
+
+No exercises
+
+** Filter Rows with ~filter()~ (pages 45-50)
+
+1. Find all flights that
+   - (a) Had an arrival delay of two or more hours
+   - (b) Flew to Houston (IAH or HOU)
+   - (c) Were operated by United, American, or Delta
+   - (d) Departed in summer (July, August, and September)
+   - (e) Arrived more than two hours late, but didn't leave late
+   - (f) Were delayed by at least an hour, but made up over 30 minutes in flight
+   - (g) Departed between midnight and 6am (inclusive)
+   -----------------------------------------------------------------------------
+
+   #+BEGIN_SRC R
+     library(nycflights13)
+     library(tidyverse)
+
+     # a. Had an arrival delay of two or more hours
+     filter(flights, arr_delay >= 120)
+     # b. Flew to Houston (IAH or HOU)
+     filter(flights, dest == "IAH" | dest == "HOU")
+     # c. Were operated by United, American, or Delta
+     filter(flights, carrier == "UA" | carrier == "AA" | carrier == "DL")
+     # d. Departed in summer (July, August, and September)
+     filter(flights, month %in% 7:9)
+     # e. Arrived more than two hours late, but didn't leave late
+     filter(flights, arr_delay >= 120 & dep_delay <= 0)
+     # f. Were delayed by at least an hour, but made up over 30 minutes in flight
+     filter(flights, dep_delay >= 60 & arr_delay >= 60)
+     # g. Departed between midnight and 6am (inclusive)
+     filter(flights, dep_time < 600)
+   #+END_SRC
+
+2. Another useful ~dplyr~ filtering helper is ~between()~. What does it do? Can
+   you use it to simplify the code needed to answer the previous challenges?
+   -----------------------------------------------------------------------------
+
+   According to the documentation, "This is a shortcut for ~x >= left & x <=
+   right~."  We could, for example, use it to re-express parts d or g from the
+   preceeding question as shown below.
+
+   #+BEGIN_SRC R
+     # part d
+     filter(flights, between(month, 7L, 9L))
+     # part g
+     filter(flights, between(month, 0L, 559L))
+   #+END_SRC
+
+3. How many flights have a missing ~dep_time~? What other variables are missing?
+   What might these rows represent?
+   -----------------------------------------------------------------------------
+
+   #+BEGIN_SRC R
+     # using `filter`
+     nrow(filter(flights, is.na(dep_time)))
+     # more efficient alternative
+     sum(is.na(flights$dep_time))
+   #+END_SRC
+
+   It could be the case that these are flights that were canceled?
+
+4. Why is ~NA ^ 0~ not missing? Why is ~NA | TRUE~ not missing? Why is ~FALSE &
+   NA~ not missing? Can you figure out the general rule? (~NA * 0~ is a tricky
+   counterexample!)
+   -----------------------------------------------------------------------------
+
+   Any number to the power of 0 is by definition 1.  Any value ORed with true is
+   true.  Any value ANDed with false is false.
+
+   It seems that if an expression contains a missing value, but that the result
+   of the expression can be determined regardless of the actual value of the
+   missing, then this result is provided rather than missing.
+
+   If the result of ~NA ^ 0~ is 0, then there doesn't seem to be any reason that
+   ~NA * 0~ wouldn't also be 0.  This might just be a inconsistency of R?
+
+** Arrange Rows with ~arrange()~ (pages 50 - 51)
+
+1. How could you use ~arrange()~ to sort all missing values to the start? (Hint:
+   use ~is.na()~.)
+   -----------------------------------------------------------------------------
+
+   #+BEGIN_SRC R
+     # with respect to a particular vairable, say `dep_time`
+     arrange(flights, desc(is.na(dep_time)))
+   #+END_SRC
+
+2. Sort ~flights~ to find the most delayed flights.  Find the flights that left
+   earliest.
+   -----------------------------------------------------------------------------
+
+   #+BEGIN_SRC R
+     # sort flights to find the most delayed flights
+     arrange(flights, desc(dep_delay))
+     # find the flights that left earliest
+     arrange(flights, dep_time)
+   #+END_SRC
+
+3. Sort ~flights~ to find the fastest flights.
+   -----------------------------------------------------------------------------
+
+   #+BEGIN_SRC R
+     arrange(flights, air_time)
+   #+END_SRC
+
+4. Which flights traveled the longest?  Which traveled the shortest?
+   -----------------------------------------------------------------------------
+
+   #+BEGIN_SRC R
+     sort_flights_dist <- arrange(flights, distance)
+     # longest
+     tail(sort_flights_dist)
+     # shortest
+     head(sort_flights_dist)
+   #+END_SRC
+
+** Select Columns with ~select()~ (pages 51 - 54)
+
+1. Brainstorm as many ways as possible to select ~dep_time~, ~dep_delay~,
+   ~arr_time~, and ~arr_delay~ from flights.
+   -----------------------------------------------------------------------------
+
+   Can enumerate any combination of:
+
+   - any of the column names ~dep_time~, ~dep_delay~, ~arr_time~, or ~arr_delay~
+
+   - ~starts_with("dep_")~
+
+   - ~starts_with("arr_")~
+
+   - ~ends_with("_time")~.  There will be some false positives, such as
+     e.g. ~air_time~.
+
+   - ~ends_with("_delay")~.
+
+   - ~contains~ with one of ~dep_~, ~arr_~, ~_time~, or ~_delay~ as an argument.
+     There will be some false positives such as e.g. ~sched_dep_time~ for
+     ~dep_~.
+
+   - ~matches~ using ~dep_~, ~arr_~, ~_time~, or ~_delay~ as part of the
+     expression, such as e.g. ~matches("^dep_")~
+
+2. What happens if you include the name of a variable multiple times in a
+   ~select()~ call?
+   -----------------------------------------------------------------------------
+
+   It seems to include the variable in the location that it is first seen,
+   reading from left to right.  For example, on page 53 the example
+   ~select(flights, time_hour, air_time, everything())~ is provided as a way to
+   move ~time_hour~ and ~air_time~ to be the first two columns of the table.
+
+3. What does the one_of() function do? Why might it be helpful in conjunction
+   with this vector?
+   #+BEGIN_SRC R
+     vars <- c("year", "month", "day", "dep_delay", "arr_delay")
+   #+END_SRC
+   -----------------------------------------------------------------------------
+
+   This function allows you to specify the column names using an existing
+   character vector of names, such as the vector ~vars~ in this example.
+
+4. Does the result of running the following code surprise you? How do the select
+   helpers deal with case by default? How can you change that default?
+   #+BEGIN_SRC R
+     select(flights, contains("TIME"))
+   #+END_SRC
+   -----------------------------------------------------------------------------
+
+   The helpers ~starts_with~, ~ends_with~, ~contains~, and ~matches~ each have
+   an argument ~ignore.case~ with a default value of ~TRUE~, so to change this
+   default just supply to it a value of ~FALSE~.
+
+** Add new variables with ~mutate()~ (pages 54 - 58)
+
+1. Currently ~dep_time~ and ~sched_dep_time~ are convenient to look at, but hard
+   to compute with because they’re not really continuous numbers. Convert them
+   to a more convenient representation of number of minutes since midnight.
+   -----------------------------------------------------------------------------
+
+   #+BEGIN_SRC R
+     mutate(flights,
+            dep_mins_from_midn = (60 * (dep_time %/% 100)) + (dep_time %% 100))
+   #+END_SRC
+
+2. Compare ~air_time~ with ~arr_time - dep_time~. What do you expect to see?
+   What do you see? What do you need to do to fix it?
+   -----------------------------------------------------------------------------
+
+   There seems to be a couple of issues here.  For one, the air time seems to
+   often be a few minutes shorter than ~time_diff~ by a few minutes such as in
+   row 8.  Perhaps ~air_time~ refers to so-called "wheels up" time, while
+   ~time_diff~ includes taxiing time?  Next, we have to account for changing
+   time zones, and is presumably occurring in row 1.  And yet another issue is
+   the one that was discussed in the preceding problem, which causes a problem
+   in row 2, for example.
+
+   #+BEGIN_SRC R
+     library(dplyr)
+     library(nycflights13)
+     flights_time_diff <- mutate(flights, time_diff = arr_time - dep_time)
+     head(select(flights_time_diff, air_time, time_diff, arr_time, dep_time), 8L)
+   #+END_SRC
+
+   |   | air_time | time_diff | arr_time | dep_time |
+   |---+----------+-----------+----------+----------|
+   | 1 |      227 |       313 |      830 |      517 |
+   | 2 |      227 |       317 |      850 |      533 |
+   | 3 |      160 |       381 |      923 |      542 |
+   | 4 |      183 |       460 |     1004 |      544 |
+   | 5 |      116 |       258 |      812 |      554 |
+   | 6 |      150 |       186 |      740 |      554 |
+   | 7 |      158 |       358 |      913 |      555 |
+   | 8 |       53 |       152 |      709 |      557 |
+
+3. Compare ~dep_time~, ~sched_dep_time~, and ~dep_delay~. How would you expect
+   those three numbers to be related?
+   -----------------------------------------------------------------------------
+
+   You would expect the ~dep_time~ to be the sum of ~sched_dep_time~ and
+   ~dep_delay~ (here "summing" has to account for the fact that these are
+   times), which indeed does seem to be the case at first glance.
+
+   #+BEGIN_SRC R
+     library(dplyr)
+     library(nycflights13)
+     head(select(flights, dep_time, sched_dep_time, dep_delay))
+   #+END_SRC
+
+   |   | dep_time | sched_dep_time | dep_delay |
+   |---+----------+----------------+-----------|
+   | 1 |      517 |            515 |         2 |
+   | 2 |      533 |            529 |         4 |
+   | 3 |      542 |            540 |         2 |
+   | 4 |      544 |            545 |        -1 |
+   | 5 |      554 |            600 |        -6 |
+   | 6 |      554 |            558 |        -4 |
+
+4. Find the 10 most delayed flights using a ranking function. How do you want to
+   handle ties? Carefully read the documentation for ~min_rank()~.
+   -----------------------------------------------------------------------------
+
+   #+BEGIN_SRC R
+     library(dplyr)
+     library(nycflights13)
+     head(arrange(flights, desc(min_rank(arr_delay))), 15)
+   #+END_SRC
+
+   |    | year | month | day | dep_time | sched_dep_time | dep_delay | arr_time | sched_arr_time | arr_delay | carrier | flight | tailnum | origin | dest | air_time | distance | hour | minute | time_hour           |
+   |----+------+-------+-----+----------+----------------+-----------+----------+----------------+-----------+---------+--------+---------+--------+------+----------+----------+------+--------+---------------------|
+   |  1 | 2013 |     1 |   9 |      641 |            900 |      1301 |     1242 |           1530 |      1272 | HA      |     51 | N384HA  | JFK    | HNL  |      640 |     4983 |    9 |      0 | 2013-01-09 09:00:00 |
+   |  2 | 2013 |     6 |  15 |     1432 |           1935 |      1137 |     1607 |           2120 |      1127 | MQ      |   3535 | N504MQ  | JFK    | CMH  |       74 |      483 |   19 |     35 | 2013-06-15 19:00:00 |
+   |  3 | 2013 |     1 |  10 |     1121 |           1635 |      1126 |     1239 |           1810 |      1109 | MQ      |   3695 | N517MQ  | EWR    | ORD  |      111 |      719 |   16 |     35 | 2013-01-10 16:00:00 |
+   |  4 | 2013 |     9 |  20 |     1139 |           1845 |      1014 |     1457 |           2210 |      1007 | AA      |    177 | N338AA  | JFK    | SFO  |      354 |     2586 |   18 |     45 | 2013-09-20 18:00:00 |
+   |  5 | 2013 |     7 |  22 |      845 |           1600 |      1005 |     1044 |           1815 |       989 | MQ      |   3075 | N665MQ  | JFK    | CVG  |       96 |      589 |   16 |      0 | 2013-07-22 16:00:00 |
+   |  6 | 2013 |     4 |  10 |     1100 |           1900 |       960 |     1342 |           2211 |       931 | DL      |   2391 | N959DL  | JFK    | TPA  |      139 |     1005 |   19 |      0 | 2013-04-10 19:00:00 |
+   |  7 | 2013 |     3 |  17 |     2321 |            810 |       911 |      135 |           1020 |       915 | DL      |   2119 | N927DA  | LGA    | MSP  |      167 |     1020 |    8 |     10 | 2013-03-17 08:00:00 |
+   |  8 | 2013 |     7 |  22 |     2257 |            759 |       898 |      121 |           1026 |       895 | DL      |   2047 | N6716C  | LGA    | ATL  |      109 |      762 |    7 |     59 | 2013-07-22 07:00:00 |
+   |  9 | 2013 |    12 |   5 |      756 |           1700 |       896 |     1058 |           2020 |       878 | AA      |    172 | N5DMAA  | EWR    | MIA  |      149 |     1085 |   17 |      0 | 2013-12-05 17:00:00 |
+   | 10 | 2013 |     5 |   3 |     1133 |           2055 |       878 |     1250 |           2215 |       875 | MQ      |   3744 | N523MQ  | EWR    | ORD  |      112 |      719 |   20 |     55 | 2013-05-03 20:00:00 |
+   | 11 | 2013 |    12 |  14 |      830 |           1845 |       825 |     1210 |           2154 |       856 | DL      |   2391 | N939DL  | JFK    | TPA  |      173 |     1005 |   18 |     45 | 2013-12-14 18:00:00 |
+   | 12 | 2013 |     5 |  19 |      713 |           1700 |       853 |     1007 |           1955 |       852 | AA      |    257 | N3HEAA  | JFK    | LAS  |      323 |     2248 |   17 |      0 | 2013-05-19 17:00:00 |
+   | 13 | 2013 |     1 |   1 |      848 |           1835 |       853 |     1001 |           1950 |       851 | MQ      |   3944 | N942MQ  | JFK    | BWI  |       41 |      184 |   18 |     35 | 2013-01-01 18:00:00 |
+   | 14 | 2013 |     6 |  27 |      959 |           1900 |       899 |     1236 |           2226 |       850 | DL      |   2007 | N3762Y  | JFK    | PDX  |      313 |     2454 |   19 |      0 | 2013-06-27 19:00:00 |
+   | 15 | 2013 |    12 |  19 |      734 |           1725 |       849 |     1046 |           2039 |       847 | DL      |   1223 | N375NC  | EWR    | SLC  |      290 |     1969 |   17 |     25 | 2013-12-19 17:00:00 |
+
+5. What does ~1:3 + 1:10~ return? Why?
+   -----------------------------------------------------------------------------
+
+   It returns the value given by ~c(1 + 1, 2 + 2, 3 + 3, 1 + 4, 2 + 5, 3 + 6,
+   1 + 7, 2 + 8, 3 + 9, 1 + 10)~ due to the fact that the ~+~ function recycles
+   terms from the shorter of its arguments until it reaches the length of the
+   longer argument (with a warning when the longer object length is not a
+   multiple of shorter object length, as is the case here).  This behavior is
+   typical of many vectorized R functions.
+
+6. What trigonometric functions does R provide?
+   -----------------------------------------------------------------------------
+
+   Some of the available trigonometric functions include ~sin~, ~cos~, ~tan~,
+   ~asin~, ~acos~, and ~atan~.  See ~help(Trig)~ for more details.
